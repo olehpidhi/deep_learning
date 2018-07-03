@@ -1,316 +1,154 @@
 import numpy as np
-from scipy.special import expit
-import sys
+
+def f_sigmoid(X, deriv=False):
+    if not deriv:
+        return 1 / (1 + np.exp(-X))
+    else:
+        return f_sigmoid(X)*(1 - f_sigmoid(X))
 
 
-class NeuralNet(object):
-    """ Feedforward neural network / Multi-layer perceptron classifier.
+def f_softmax(X):
+    Z = np.sum(np.exp(X), axis=1)
+    Z = Z.reshape(Z.shape[0], 1)
+    return np.exp(X) / Z
 
-    Parameters
-    ------------
-    n_output : int
-        Number of output units, should be equal to the
-        number of unique class labels.
-    n_features : int
-        Number of features (dimensions) in the target dataset.
-        Should be equal to the number of columns in the X array.
-    n_hidden : int (default: 30)
-        Number of hidden units.
-    l1 : float (default: 0.0)
-        Lambda value for L1-regularization.
-        No regularization if l1=0.0 (default)
-    l2 : float (default: 0.0)
-        Lambda value for L2-regularization.
-        No regularization if l2=0.0 (default)
-    epochs : int (default: 500)
-        Number of passes over the training set.
-    eta : float (default: 0.001)
-        Learning rate.
-    alpha : float (default: 0.0)
-        Momentum constant. Factor multiplied with the
-        gradient of the previous epoch t-1 to improve
-        learning speed
-        w(t) := w(t) - (grad(t) + alpha*grad(t-1))
-    decrease_const : float (default: 0.0)
-        Decrease constant. Shrinks the learning rate
-        after each epoch via eta / (1 + epoch*decrease_const)
-    shuffle : bool (default: True)
-        Shuffles training data every epoch if True to prevent circles.
-    minibatches : int (default: 1)
-        Divides training data into k minibatches for efficiency.
-        Normal gradient descent learning if k=1 (default).
-    random_state : int (default: None)
-        Set random state for shuffling and initializing the weights.
 
-    Attributes
-    -----------
-    cost_ : list
-      Sum of squared errors after each epoch.
+class Layer:
+    def __init__(self, size, minibatch_size, is_input=False, is_output=False,
+                 activation=f_sigmoid):
+        self.is_input = is_input
+        self.is_output = is_output
 
-    """
-    def __init__(self, n_output, n_features, n_hidden=30,
-                 l1=0.0, l2=0.0, epochs=500, eta=0.001,
-                 alpha=0.0, decrease_const=0.0, shuffle=True,
-                 minibatches=1, random_state=None):
+        # Z is the matrix that holds output values
+        self.Z = np.zeros((minibatch_size, size[0]))
+        # The activation function is an externally defined function (with a
+        # derivative) that is stored here
+        self.activation = activation
 
-        np.random.seed(random_state)
-        self.n_output = n_output
-        self.n_features = n_features
-        self.n_hidden = n_hidden
-        self.l1 = l1
-        self.l2 = l2
-        self.epochs = epochs
-        self.eta = eta
-        self.alpha = alpha
-        self.decrease_const = decrease_const
-        self.shuffle = shuffle
-        self.minibatches = minibatches
+        # W is the outgoing weight matrix for this layer
+        self.W = None
+        # S is the matrix that holds the inputs to this layer
+        self.S = None
+        # D is the matrix that holds the deltas for this layer
+        self.D = None
+        # Fp is the matrix that holds the derivatives of the activation function
+        self.Fp = None
+
+        if not is_input:
+            self.S = np.zeros((minibatch_size, size[0]))
+            self.D = np.zeros((minibatch_size, size[0]))
+
+        if not is_output:
+            self.W = np.random.normal(size=size, scale=1E-4)
+
+        if not is_input and not is_output:
+            self.Fp = np.zeros((size[0], minibatch_size))
+
+    def forward_propagate(self):
+        if self.is_input:
+            return self.Z.dot(self.W)
+
+        self.Z = self.activation(self.S)
+        if self.is_output:
+            return self.Z
+        else:
+            # For hidden layers, we add the bias values here
+            self.Z = np.append(self.Z, np.ones((self.Z.shape[0], 1)), axis=1)
+            self.Fp = self.activation(self.S, deriv=True).T
+            return self.Z.dot(self.W)
+
+
+class MLP:
+    def __init__(self, layer_config, minibatch_size=100):
         self.layers = []
+        self.num_layers = len(layer_config)
+        self.minibatch_size = minibatch_size
 
-    def _encode_labels(self, y, k):
-        """Encode labels into one-hot representation
+        for i in range(self.num_layers-1):
+            if i == 0:
+                print("Initializing input layer with size {0}.".format(
+                    layer_config[i]
+                ))
+                # Here, we add an additional unit at the input for the bias
+                # weight.
+                self.layers.append(Layer([layer_config[i]+1, layer_config[i+1]],
+                                         minibatch_size,
+                                         is_input=True))
+            else:
+                print("Initializing hidden layer with size {0}.".format(
+                    layer_config[i]
+                ))
+                # Here we add an additional unit in the hidden layers for the
+                # bias weight.
+                self.layers.append(Layer([layer_config[i]+1, layer_config[i+1]],
+                                         minibatch_size,
+                                         activation=f_sigmoid))
 
-        Parameters
-        ------------
-        y : array, shape = [n_samples]
-            Target values.
+        print("Initializing output layer with size {0}.".format(
+            layer_config[-1]
+        ))
+        self.layers.append(Layer([layer_config[-1], None],
+                                 minibatch_size,
+                                 is_output=True,
+                                 activation=f_softmax))
+        print("Done!")
 
-        Returns
-        -----------
-        onehot : array, shape = (n_labels, n_samples)
+    def forward_propagate(self, data):
+        # We need to be sure to add bias values to the input
+        self.layers[0].Z = np.append(data, np.ones((data.shape[0], 1)), axis=1)
 
-        """
-        onehot = np.zeros((k, y.shape[0]))
-        for idx, val in enumerate(y):
-            onehot[val, idx] = 1.0
-        return onehot
+        for i in range(self.num_layers-1):
+            self.layers[i+1].S = self.layers[i].forward_propagate()
+        return self.layers[-1].forward_propagate()
 
-    def _sigmoid(self, z, derivative=False):
-        if derivative:
-            sg = self._sigmoid(z)
-            return sg * (1.0 - sg)
-        else:
-            return expit(z)
+    def backpropagate(self, yhat, labels):
+        self.layers[-1].D = (yhat - labels).T
+        for i in range(self.num_layers-2, 0, -1):
+            # We do not calculate deltas for the bias values
+            W_nobias = self.layers[i].W[0:-1, :]
 
-    def _add_bias_unit(self, X, how='column'):
-        """Add bias unit (column or row of 1s) to array at index 0"""
-        if how == 'column':
-            X_new = np.ones((X.shape[0], X.shape[1] + 1))
-            X_new[:, 1:] = X
-        elif how == 'row':
-            X_new = np.ones((X.shape[0] + 1, X.shape[1]))
-            X_new[1:, :] = X
-        else:
-            raise AttributeError('`how` must be `column` or `row`')
-        return X_new
+            self.layers[i].D = W_nobias.dot(self.layers[i+1].D) * \
+                               self.layers[i].Fp
 
-    def _feedforward(self, X, layers):
-        """Compute feedforward step
+    def update_weights(self, eta):
+        for i in range(0, self.num_layers-1):
+            W_grad = -eta*(self.layers[i+1].D.dot(self.layers[i].Z)).T
+            self.layers[i].W += W_grad
 
-        Parameters
-        -----------
-        X : array, shape = [n_samples, n_features]
-            Input layer with original features.
-        w1 : array, shape = [n_hidden_units, n_features]
-            Weight matrix for input layer -> hidden layer.
-        w2 : array, shape = [n_output_units, n_hidden_units]
-            Weight matrix for hidden layer -> output layer.
 
-        Returns
-        ----------
-        a1 : array, shape = [n_samples, n_features+1]
-            Input values with bias unit.
-        z2 : array, shape = [n_hidden, n_samples]
-            Net input of hidden layer.
-        a2 : array, shape = [n_hidden+1, n_samples]
-            Activation of hidden layer.
-        z3 : array, shape = [n_output_units, n_samples]
-            Net input of output layer.
-        a3 : array, shape = [n_output_units, n_samples]
-            Activation of output layer.
+    def evaluate(self, train_data, train_labels, test_data, test_labels,
+                 num_epochs=500, eta=0.05, eval_train=False, eval_test=True):
 
-        """
-        input = X.T
-        for l in layers:
-            input = self._add_bias_unit(input, how='row')
-            weighed = l.weigh(input)
-            activated = l.activate(weighed)
-            input = activated
+        N_train = len(train_labels)*len(train_labels[0])
+        N_test = len(test_labels)*len(test_labels[0])
 
-        return layers[0].input.T, layers[0].weighed_input, layers[1].input, layers[1].weighed_input, layers[1].output
+        print("Training for {0} epochs...".format(num_epochs))
+        for t in range(0, num_epochs):
+            out_str = "[{0:4d}] ".format(t)
 
-    def _L2_reg(self, lambda_, w1, w2):
-        """Compute L2-regularization cost"""
-        return (lambda_/2.0) * (np.sum(w1[:, 1:] ** 2) +
-                                np.sum(w2[:, 1:] ** 2))
+            for b_data, b_labels in zip(train_data, train_labels):
+                output = self.forward_propagate(b_data)
+                self.backpropagate(output, b_labels)
+                self.update_weights(eta=eta)
 
-    def _L1_reg(self, lambda_, w1, w2):
-        """Compute L1-regularization cost"""
-        return (lambda_/2.0) * (np.abs(w1[:, 1:]).sum() +
-                                np.abs(w2[:, 1:]).sum())
+            if eval_train:
+                errs = 0
+                for b_data, b_labels in zip(train_data, train_labels):
+                    output = self.forward_propagate(b_data)
+                    yhat = np.argmax(output, axis=1)
+                    errs += np.sum(1-b_labels[np.arange(len(b_labels)), yhat])
 
-    def _get_cost(self, y_enc, output, w1, w2):
-        """Compute cost function.
+                out_str = "{0} Training error: {1:.5f}".format(out_str,
+                                                           float(errs)/N_train)
 
-        Parameters
-        ----------
-        y_enc : array, shape = (n_labels, n_samples)
-            one-hot encoded class labels.
-        output : array, shape = [n_output_units, n_samples]
-            Activation of the output layer (feedforward)
-        w1 : array, shape = [n_hidden_units, n_features]
-            Weight matrix for input layer -> hidden layer.
-        w2 : array, shape = [n_output_units, n_hidden_units]
-            Weight matrix for hidden layer -> output layer.
+            if eval_test:
+                errs = 0
+                for b_data, b_labels in zip(test_data, test_labels):
+                    output = self.forward_propagate(b_data)
+                    yhat = np.argmax(output, axis=1)
+                    errs += np.sum(1-b_labels[np.arange(len(b_labels)), yhat])
 
-        Returns
-        ---------
-        cost : float
-            Regularized cost.
+                out_str = "{0} Test error: {1:.5f}".format(out_str,
+                                                       float(errs)/N_test)
 
-        """
-        term1 = -y_enc * (np.log(output))
-        term2 = (1.0 - y_enc) * np.log(1.0 - output)
-        cost = np.sum(term1 - term2)
-        L1_term = self._L1_reg(self.l1, w1, w2)
-        L2_term = self._L2_reg(self.l2, w1, w2)
-        cost = cost + L1_term + L2_term
-        return cost
-
-    def _get_gradient(self, a1, a2, a3, z2, y_enc, w1, w2):
-        """ Compute gradient step using backpropagation.
-
-        Parameters
-        ------------
-        a1 : array, shape = [n_samples, n_features+1]
-            Input values with bias unit.
-        a2 : array, shape = [n_hidden+1, n_samples]
-            Activation of hidden layer.
-        a3 : array, shape = [n_output_units, n_samples]
-            Activation of output layer.
-        z2 : array, shape = [n_hidden, n_samples]
-            Net input of hidden layer.
-        y_enc : array, shape = (n_labels, n_samples)
-            one-hot encoded class labels.
-        w1 : array, shape = [n_hidden_units, n_features]
-            Weight matrix for input layer -> hidden layer.
-        w2 : array, shape = [n_output_units, n_hidden_units]
-            Weight matrix for hidden layer -> output layer.
-
-        Returns
-        ---------
-        grad1 : array, shape = [n_hidden_units, n_features]
-            Gradient of the weight matrix w1.
-        grad2 : array, shape = [n_output_units, n_hidden_units]
-            Gradient of the weight matrix w2.
-
-        """
-        # backpropagation
-        sigma3 = a3 - y_enc
-        z2 = self._add_bias_unit(z2, how='row')
-        sigma2 = w2.T.dot(sigma3) * self._sigmoid(z2, True)
-        sigma2 = sigma2[1:, :]
-        grad1 = sigma2.dot(a1)
-        grad2 = sigma3.dot(a2.T)
-
-        # regularize
-        grad1[:, 1:] += self.l2 * w1[:, 1:]
-        grad1[:, 1:] += self.l1 * np.sign(w1[:, 1:])
-        grad2[:, 1:] += self.l2 * w2[:, 1:]
-        grad2[:, 1:] += self.l1 * np.sign(w2[:, 1:])
-
-        return grad1, grad2
-
-    def add_layer(self, layer, pos=None):
-        if pos:
-            self.layers.insert(pos, layer)
-        else:
-            self.layers.append(layer)
-
-    def predict(self, X):
-        """Predict class labels
-
-        Parameters
-        -----------
-        X : array, shape = [n_samples, n_features]
-            Input layer with original features.
-
-        Returns:
-        ----------
-        y_pred : array, shape = [n_samples]
-            Predicted class labels.
-
-        """
-        if len(X.shape) != 2:
-            raise AttributeError('X must be a [n_samples, n_features] array.\n'
-                                 'Use X[:,None] for 1-feature classification,'
-                                 '\nor X[[i]] for 1-sample classification')
-
-        a1, z2, a2, z3, a3 = self._feedforward(X, self.w1, self.w2)
-        y_pred = np.argmax(z3, axis=0)
-        return y_pred
-
-    def fit(self, X, y, print_progress=False):
-        """ Learn weights from training data.
-
-        Parameters
-        -----------
-        X : array, shape = [n_samples, n_features]
-            Input layer with original features.
-        y : array, shape = [n_samples]
-            Target class labels.
-        print_progress : bool (default: False)
-            Prints progress as the number of epochs
-            to stderr.
-
-        Returns:
-        ----------
-        self
-
-        """
-        self.cost_ = []
-        X_data, y_data = X.copy(), y.copy()
-        y_enc = self._encode_labels(y, self.n_output)
-
-        delta_w1_prev = np.zeros(self.layers[0].weights.shape)
-        delta_w2_prev = np.zeros(self.layers[1].weights.shape)
-
-        for i in range(self.epochs):
-
-            # adaptive learning rate
-            self.eta /= (1 + self.decrease_const*i)
-
-            if print_progress:
-                sys.stdout.write('\rEpoch: %d/%d' % (i+1, self.epochs))
-                sys.stdout.flush()
-
-            if self.shuffle:
-                idx = np.random.permutation(y_data.shape[0])
-                X_data, y_enc = X_data[idx], y_enc[:, idx]
-
-            mini = np.array_split(range(y_data.shape[0]), self.minibatches)
-
-            for idx in mini:
-
-                # feedforward
-                a1, z2, a2, z3, a3 = self._feedforward(X_data[idx], self.layers)
-
-                cost = self._get_cost(y_enc=y_enc[:, idx],
-                                      output=a3,
-                                      w1=self.layers[0].weights,
-                                      w2=self.layers[1].weights)
-                self.cost_.append(cost)
-
-                # compute gradient via backpropagation
-                grad1, grad2 = self._get_gradient(a1=a1, a2=a2,
-                                                  a3=a3, z2=z2,
-                                                  y_enc=y_enc[:, idx],
-                                                  w1=self.layers[0].weights,
-                                                  w2=self.layers[1].weights)
-
-                delta_w1, delta_w2 = self.eta * grad1, self.eta * grad2
-                self.layers[0].weights -= (delta_w1 + (self.alpha * delta_w1_prev))
-                self.layers[1].weights -= (delta_w2 + (self.alpha * delta_w2_prev))
-                delta_w1_prev, delta_w2_prev = delta_w1, delta_w2
-
-        return self
+            print(out_str)
