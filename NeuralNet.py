@@ -61,7 +61,7 @@ class SkipLayer:
         self.Ws = np.eye(num_of_neurons, num_of_outputs)
 
     def activate(self, input):
-        self.output = input + (self.skip_connection).dot(self.Ws)
+        self.output = input + (self.skip_connection).dot(self.Ws.T)
         return self.output
 
     def update_skip_connection(self, skip_connection):

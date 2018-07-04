@@ -96,12 +96,13 @@ def get_data():
 
 def build_model(learning_rate):
     num_of_features = 9
-    dim_hidden_1 = 9
+    dim_hidden_1 = 12
+    dim_hidden_2 = 6
     dim_hidden_3 = 2
     layer = Layer(num_of_features, dim_hidden_1, ReLU)
-    layer1 = Layer(num_of_features, dim_hidden_1, tanh_f)
-    layer2 = SkipLayer(dim_hidden_1, num_of_features)
-    layer3 = Layer(dim_hidden_1, dim_hidden_3, softmax)
+    layer1 = Layer(dim_hidden_1, dim_hidden_2, tanh_f)
+    layer2 = SkipLayer(dim_hidden_2, num_of_features)
+    layer3 = Layer(dim_hidden_2, dim_hidden_3, softmax)
 
     return NeuralNet([layer, layer1, layer2, layer3], skip_layer=layer2, learning_rate=learning_rate)
 
