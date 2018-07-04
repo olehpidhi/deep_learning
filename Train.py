@@ -100,7 +100,7 @@ def build_model(learning_rate):
     dim_hidden_3 = 2
     layer = Layer(num_of_features, dim_hidden_1, ReLU)
     layer1 = Layer(num_of_features, dim_hidden_1, tanh_f)
-    layer2 = SkipLayer(dim_hidden_1, num_of_features, np.zeros((2, 2)))
+    layer2 = SkipLayer(dim_hidden_1, num_of_features)
     layer3 = Layer(dim_hidden_1, dim_hidden_3, softmax)
 
     return NeuralNet([layer, layer1, layer2, layer3], skip_layer=layer2, learning_rate=learning_rate)
