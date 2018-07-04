@@ -1,4 +1,19 @@
 import numpy as np
+from sklearn.neural_network._base import softmax, relu, tanh
+
+def ReLU(x, deriv=False):
+    if deriv:
+        x[x <= 0] = 0
+        x[x > 0] = 1
+        return x
+    else:
+        return relu(x)
+
+def tanh_f(x, deriv=False):
+    if deriv:
+        return 1 - x * x
+    else:
+        return tanh(x)
 
 def f_sigmoid(X, deriv=False):
     if not deriv:
@@ -7,22 +22,32 @@ def f_sigmoid(X, deriv=False):
         return f_sigmoid(X)*(1 - f_sigmoid(X))
 
 
-def f_softmax(X):
-    Z = np.sum(np.exp(X), axis=1)
-    Z = Z.reshape(Z.shape[0], 1)
-    return np.exp(X) / Z
-
 class Layer:
 
     def __init__(self, num_of_neurons, num_of_outputs, activationFunction):
-        self.W = np.random.randn(num_of_outputs, num_of_neurons)
+        self.W = np.random.randn(num_of_neurons, num_of_outputs)
         self.B = np.random.randn(1, num_of_outputs)
         self.activationFunction = activationFunction
         self.num_of_neurons = num_of_neurons
         self.num_of_outputs = num_of_outputs
 
     def activate(self, input):
-        return self.activationFunction(input.dot(self.W.T) + np.repeat(self.B, input.shape[0], axis=0))
+        self.input = input
+        self.weighed_input = input.dot(self.W) + np.repeat(self.B, input.shape[0], axis=0)
+        self.output = self.activationFunction(self.weighed_input)
+        return self.output
+
+    def error_signal(self, next_layer):
+        derivative = self.activationFunction(self.weighed_input, True)
+        self.delta = derivative * (next_layer.delta.dot(next_layer.W.T))
+
+        return self.delta
+
+    def update_weights(self, input, learning_rate):
+        delta_weight = learning_rate * input.T.dot(self.delta)
+        self.W -= delta_weight
+        self.B -= np.sum(delta_weight, axis=0)
+
 
 class SkipLayer:
     def __init__(self, num_of_neurons, num_of_outputs, skip_connection):
@@ -30,13 +55,24 @@ class SkipLayer:
         self.skip_connection = skip_connection
 
     def activate(self, input):
-        return input+ self.Ws.dot(self.skip_connection)
+        self.output = input + (self.skip_connection).dot(self.Ws)
+        return self.output
+
+    def update_weights(self, input, learning_rate):
+        pass
+
+    def error_signal(self, next_layer):
+        self.delta = next_layer.delta
+        self.W = next_layer.W
+        return next_layer.delta
 
 
 class NeuralNet:
 
-    def __init__(self, layers):
+    def __init__(self, layers, learning_rate):
         self.layers = layers
+        self.learning_rate = learning_rate
+
 
     def forward(self, input):
         activation = self.layers[0].activate(input)
@@ -44,18 +80,34 @@ class NeuralNet:
             activation = layer.activate(activation)
         return activation
 
-num_of_features = 9
-dim_hidden_1 = 9
-dim_hidden_3 = 2
-input = np.ones((15, 9))
+    def backward(self, input, y_hat, X):
+        self.layers[-1].delta = (input - y_hat)
+        self.layers[-2].error_signal(self.layers[-1])
+        self.layers[-3].error_signal(self.layers[-2])
+        self.layers[-4].error_signal(self.layers[-3])
 
-layer  = Layer(num_of_features, dim_hidden_1, f_sigmoid)
-layer1 = SkipLayer(dim_hidden_1, num_of_features, input)
-layer2 = Layer(dim_hidden_1, dim_hidden_3, f_softmax)
+        self.layers[-1].update_weights(self.layers[-2].output, self.learning_rate)
+        self.layers[-2].update_weights(self.layers[-3].output, self.learning_rate)
+        self.layers[-3].update_weights(self.layers[-4].output, self.learning_rate)
+        self.layers[-4].update_weights(X, self.learning_rate)
 
-network = NeuralNet([layer2])
-print(network.forward(input))
 
+# num_of_features = 9
+# dim_hidden_1 = 9
+# dim_hidden_3 = 2
+# input = np.ones((15, 9))
+#
+# layer = Layer(num_of_features, dim_hidden_1, ReLU)
+# layer1 = Layer(num_of_features, dim_hidden_1, tanh_f)
+# layer2 = SkipLayer(dim_hidden_1, num_of_features, input)
+# layer3 = Layer(dim_hidden_1, dim_hidden_3, softmax)
+#
+# network = NeuralNet([layer, layer1, layer2, layer3])
+# output = network.forward(input)
+# print(output)
+# network.backward(output, np.eye(15, dim_hidden_3), input)
+# output = network.forward(input)
+# print(output)
 
 #
 # class Layer:
