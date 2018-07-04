@@ -1,14 +1,14 @@
 from NeuralNet import *
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
+import pandas as pd
 
 class Trainer:
 
-    def __init__(self, data, labels, learning_rates, batch_sizes, number_of_epochs):
+    def __init__(self, data, labels, batch_size, number_of_epochs):
         self.data = data
         self.labels = labels
-        self.learning_rates = learning_rates
-        self.batch_sizes = batch_sizes
+        self.batch_size = batch_size
         self.number_of_epochs = number_of_epochs
         self.validation_loss = []
         self.validation_accuracies = []
@@ -83,30 +83,36 @@ class Trainer:
         predictions = model.forward(data)
         return predictions
 
-import pandas as pd
+def get_data():
+    data = pd.read_csv('breast-cancer.data', sep=",", header=None)
+    data.columns = ["class", "age", "menopause", "tumor-size", "inv-nodes", "node-caps", "deg-malig", "breast",
+                    "breast-quad", "irradit"]
+    for column in data:
+        data[column], mapping_index = pd.factorize(data[column])
 
-data = pd.read_csv('breast-cancer.data', sep=",", header=None)
-data.columns = ["class", "age", "menopause", "tumor-size", "inv-nodes", "node-caps", "deg-malig", "breast", "breast-quad", "irradit"]
-for column in data:
-    data[column], mapping_index = pd.factorize(data[column])
+    labels = data['class']
+    data = data.drop(columns=['class'])
+    return data.values, labels.values
 
-negative = data[data['class'] == 0]
-positive = data[data['class'] == 1]
+def build_model(learning_rate):
+    num_of_features = 9
+    dim_hidden_1 = 9
+    dim_hidden_3 = 2
+    layer = Layer(num_of_features, dim_hidden_1, ReLU)
+    layer1 = Layer(num_of_features, dim_hidden_1, tanh_f)
+    layer2 = SkipLayer(dim_hidden_1, num_of_features, np.zeros((2, 2)))
+    layer3 = Layer(dim_hidden_1, dim_hidden_3, softmax)
 
-labels = data['class']
-data = data.drop(columns=['class'])
+    return NeuralNet([layer, layer1, layer2, layer3], skip_layer=layer2, learning_rate=learning_rate)
 
-num_of_features = 9
-dim_hidden_1 = 9
-dim_hidden_3 = 2
-input = data.values
+def main():
+    input, labels = get_data()
+    model = build_model(learning_rate=0.001)
+    trainer = Trainer(input, labels, 20, 100)
+    trainer.fit(model=model)
 
-layer = Layer(num_of_features, dim_hidden_1, ReLU)
-layer1 = Layer(num_of_features, dim_hidden_1, tanh_f)
-layer2 = SkipLayer(dim_hidden_1, num_of_features, input)
-layer3 = Layer(dim_hidden_1, dim_hidden_3, softmax)
+main()
 
-network = NeuralNet([layer, layer1, layer2, layer3], skip_layer=layer2, learning_rate=0.001)
 
-trainer = Trainer(data.values, labels.values, [0.1, 0.001, 0.0001], [10, 20, 50], 100)
-trainer.fit(model=network)
+
+
