@@ -17,7 +17,8 @@ class Trainer:
         X_train, X_test, y_train, y_test = train_test_split(train, true_labels, test_size=0.25, random_state=42)
         return X_train, X_test, y_train, y_test
 
-    def indices_to_one_hot(self, data, nb_classes):
+    @staticmethod
+    def indices_to_one_hot(data, nb_classes):
         targets = np.array(data).reshape(-1)
         return np.eye(nb_classes)[targets]
 
@@ -27,7 +28,6 @@ class Trainer:
         for i in range(self.number_of_epochs):
             model.forward(X_train)
             model.backward(output, y_values, input)
-
 
         return model.forward(self.data)
 
@@ -50,23 +50,24 @@ dim_hidden_3 = 2
 input = data.values
 
 
-y_values = indices_to_one_hot(labels.values, 2)
+y_values = Trainer.indices_to_one_hot(labels.values, 2)
 
 layer = Layer(num_of_features, dim_hidden_1, ReLU)
 layer1 = Layer(num_of_features, dim_hidden_1, tanh_f)
 layer2 = SkipLayer(dim_hidden_1, num_of_features, input)
 layer3 = Layer(dim_hidden_1, dim_hidden_3, softmax)
 
-network = NeuralNet([layer, layer1, layer2, layer3])
+network = NeuralNet([layer, layer1, layer2, layer3], 0.1)
 
 output = network.forward(input)
 network.backward(output, y_values, input)
 output = network.forward(input)
 network.backward(output, y_values, input)
 output = network.forward(input)
+print(network.loss)
 
-trainer = Trainer(np.array(data.values), np.array(labels.values), [0.1, 0.001, 0.0001], [10, 20, 50], 100)
-trainer.random_batch(data.values, labels.values, 30)
+# trainer = Trainer(np.array(data.values), np.array(labels.values), [0.1, 0.001, 0.0001], [10, 20, 50], 100)
+# trainer.random_batch(data.values, labels.values, 30)
 
 
 # print(x.shape)

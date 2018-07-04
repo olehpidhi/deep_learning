@@ -1,5 +1,6 @@
 import numpy as np
 from sklearn.neural_network._base import softmax, relu, tanh
+from sklearn.metrics import log_loss
 
 def ReLU(x, deriv=False):
     if deriv:
@@ -72,7 +73,7 @@ class NeuralNet:
     def __init__(self, layers, learning_rate):
         self.layers = layers
         self.learning_rate = learning_rate
-
+        self.loss = []
 
     def forward(self, input):
         activation = self.layers[0].activate(input)
@@ -81,6 +82,8 @@ class NeuralNet:
         return activation
 
     def backward(self, input, y_hat, X):
+        self.loss.append(log_loss(y_hat, input))
+
         self.layers[-1].delta = (input - y_hat)
         self.layers[-2].error_signal(self.layers[-1])
         self.layers[-3].error_signal(self.layers[-2])
