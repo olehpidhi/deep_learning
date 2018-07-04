@@ -23,19 +23,37 @@ class Trainer:
         return np.eye(nb_classes)[targets]
 
     def loss(self, predictions, y_hat):
-        self.validation_loss.append(log_loss(y_hat, predictions))
+        l = log_loss(y_hat, predictions)
+        self.validation_loss.append(l)
+        return l
+
+    @staticmethod
+    def batcherize(set, batch_size):
+        for i in range(0, len(set), batch_size):
+            yield set[i: min(i+batch_size, len(set) - 1)]
 
     def fit(self, model):
         X_train, X_test, y_train, y_test = self.data_split()
         y_test_hat = self.indices_to_one_hot(y_test, 2)
 
+        batch_size = 20
+
+        batches = np.array(list(Trainer.batcherize(X_train, batch_size)))
+        label_batches = np.array(list(Trainer.batcherize(y_train, batch_size)))
+
+        batch_out = []
         for i in range(self.number_of_epochs):
-            output = model.forward(X_train)
-            y_hat = self.indices_to_one_hot(y_train, 2)
-            model.backward(output, y_hat, X_train)
+
+            batch_loss = []
+            for b in range(len(batches)):
+                output = model.forward(batches[b])
+                y_hat = self.indices_to_one_hot(label_batches[b], 2)
+                batch_loss.append(model.backward(output, y_hat, batches[b]))
+            average_loss = np.average(batch_loss)
+            batch_out.append(average_loss)
             self.loss(model.forward(X_test), y_test_hat)
 
-        self.plot_model(model.loss, self.validation_loss)
+        self.plot_model(batch_out, self.validation_loss)
 
     def plot_model(self, loss, val_loss):
         # Create sub-plots

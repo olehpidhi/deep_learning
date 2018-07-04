@@ -96,7 +96,8 @@ class NeuralNet:
         return activation
 
     def backward(self, input, y_hat, X):
-        self.loss.append(log_loss(y_hat, input))
+        l = log_loss(y_hat, input)
+        self.loss.append(l)
 
         self.layers[-1].delta = (input - y_hat)
         self.layers[-2].error_signal(self.layers[-1])
@@ -107,6 +108,7 @@ class NeuralNet:
         self.layers[-2].update_weights(self.layers[-3].output, self.learning_rate)
         self.layers[-3].update_weights(self.layers[-4].output, self.learning_rate)
         self.layers[-4].update_weights(X, self.learning_rate)
+        return l
 
 
 # num_of_features = 9
