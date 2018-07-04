@@ -11,6 +11,8 @@ class Trainer:
         self.batch_sizes = batch_sizes
         self.number_of_epochs = number_of_epochs
         self.validation_loss = []
+        self.validation_accuracies = []
+        self.train_accuracies = []
 
     def data_split(self):
         train = self.data
@@ -25,6 +27,16 @@ class Trainer:
     def loss(self, predictions, y_hat):
         self.validation_loss.append(log_loss(y_hat, predictions))
 
+    def train_accuracy(self, predicted, true_value):
+        predictions = predicted.argmax(axis=1)
+        truth = np.argmax(true_value, axis=1)
+        self.train_accuracies.append(sum(truth == predictions) / len(true_value))
+
+    def accuracy(self, predicted, true_value):
+        predictions = predicted.argmax(axis=1)
+        truth = np.argmax(true_value, axis=1)
+        self.validation_accuracies.append(sum(truth == predictions) / len(true_value))
+
     def fit(self, model):
         X_train, X_test, y_train, y_test = self.data_split()
         y_test_hat = self.indices_to_one_hot(y_test, 2)
@@ -33,15 +45,20 @@ class Trainer:
             output = model.forward(X_train)
             y_hat = self.indices_to_one_hot(y_train, 2)
             model.backward(output, y_hat, X_train)
-            self.loss(model.forward(X_test), y_test_hat)
+            self.train_accuracy(output, y_hat)
 
-        self.plot_model(model.loss, self.validation_loss)
+            predicted = model.forward(X_test)
+            self.loss(predicted, y_test_hat)
+            self.accuracy(predicted, y_test_hat)
 
-    def plot_model(self, loss, val_loss):
+        self.plot_model(model.loss, self.validation_loss, self.train_accuracies, self.validation_accuracies)
+        # print(self.validation_accuracies)
+
+    def plot_model(self, loss, val_loss, train_accuracies, validation_accuracy):
         # Create sub-plots
         fig, axs = plt.subplots(1, 2, figsize=(15, 5))
 
-        # Summarize history for accuracy
+        # Summarize history for loss
         axs[0].plot(range(1, len(loss) + 1), loss)
         axs[0].plot(range(1, len(val_loss) + 1), val_loss)
         axs[0].set_title('Model Loss')
@@ -49,6 +66,15 @@ class Trainer:
         axs[0].set_xlabel('Epoch')
         axs[0].set_xticks(np.arange(1, len(val_loss) + 1), len(val_loss) / 10)
         axs[0].legend(['train', 'val'], loc='best')
+
+        # Summarize history for accuracy
+        axs[1].plot(range(1, len(train_accuracies) + 1), train_accuracies)
+        axs[1].plot(range(1, len(validation_accuracy) + 1), validation_accuracy)
+        axs[1].set_title('Model Accuracy')
+        axs[1].set_ylabel('Accuracy')
+        axs[1].set_xlabel('Epoch')
+        axs[1].set_xticks(np.arange(1, len(val_loss) + 1), len(val_loss) / 10)
+        axs[1].legend(['train', 'val'], loc='best')
 
         # Show the plot
         plt.show()
@@ -82,5 +108,5 @@ layer3 = Layer(dim_hidden_1, dim_hidden_3, softmax)
 
 network = NeuralNet([layer, layer1, layer2, layer3], skip_layer=layer2, learning_rate=0.001)
 
-trainer = Trainer(data.values, labels.values, [0.1, 0.001, 0.0001], [10, 20, 50], 1000)
+trainer = Trainer(data.values, labels.values, [0.1, 0.001, 0.0001], [10, 20, 50], 100)
 trainer.fit(model=network)
