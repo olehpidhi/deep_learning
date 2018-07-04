@@ -26,11 +26,16 @@ def f_sigmoid(X, deriv=False):
 class Layer:
 
     def __init__(self, num_of_neurons, num_of_outputs, activationFunction):
-        self.W = np.random.randn(num_of_neurons, num_of_outputs)
-        self.B = np.random.randn(1, num_of_outputs)
+
         self.activationFunction = activationFunction
         self.num_of_neurons = num_of_neurons
         self.num_of_outputs = num_of_outputs
+        self.xavier_init()
+
+    def xavier_init(self):
+        stdv = 2. / (self.num_of_neurons)
+        self.W = np.random.uniform(-stdv, stdv, (self.num_of_neurons, self.num_of_outputs))
+        self.B = np.random.uniform(-stdv, stdv, (1, self.num_of_outputs))
 
     def activate(self, input):
         self.input = input
