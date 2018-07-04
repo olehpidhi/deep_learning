@@ -57,12 +57,11 @@ class Layer:
 
 class SkipLayer:
 
-    def __init__(self, num_of_neurons, num_of_outputs, skip_connection):
+    def __init__(self, num_of_neurons, num_of_outputs):
         self.Ws = np.eye(num_of_neurons, num_of_outputs)
-        self.skip_connection = skip_connection
 
     def activate(self, input):
-        self.output = input + (self.skip_connection).dot(self.Ws)
+        self.output = input + (self.skip_connection).dot(self.Ws.T)
         return self.output
 
     def update_skip_connection(self, skip_connection):
@@ -96,9 +95,6 @@ class NeuralNet:
         return activation
 
     def backward(self, input, y_hat, X):
-        l = log_loss(y_hat, input)
-        self.loss.append(l)
-
         self.layers[-1].delta = (input - y_hat)
         self.layers[-2].error_signal(self.layers[-1])
         self.layers[-3].error_signal(self.layers[-2])
@@ -108,7 +104,6 @@ class NeuralNet:
         self.layers[-2].update_weights(self.layers[-3].output, self.learning_rate)
         self.layers[-3].update_weights(self.layers[-4].output, self.learning_rate)
         self.layers[-4].update_weights(X, self.learning_rate)
-        return l
 
 
 # num_of_features = 9
