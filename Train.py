@@ -48,7 +48,7 @@ class Trainer:
         X_train, X_test, y_train, y_test = self.data_split()
         y_test_hat = self.indices_to_one_hot(y_test, 2)
 
-        batch_size = 20
+        batch_size = self.batch_size
 
         batches = np.array(list(Trainer.batcherize(X_train, batch_size)))
         label_batches = np.array(list(Trainer.batcherize(y_train, batch_size)))
@@ -67,9 +67,8 @@ class Trainer:
             predicted = model.forward(X_test)
             self.validation_loss.append(self.loss(predicted, y_test_hat))
             self.accuracy(predicted, y_test_hat)
+        return self.train_loss, self.validation_loss, self.train_accuracies, self.validation_accuracies
 
-        self.plot_model(self.train_loss, self.validation_loss, self.train_accuracies, self.validation_accuracies)
-        # print(self.validation_accuracies)
 
     def plot_model(self, loss, val_loss, train_accuracies, validation_accuracy):
         # Create sub-plots
@@ -111,7 +110,7 @@ def get_data():
     data = data.drop(columns=['class'])
     return data.values, labels.values
 
-def build_model(learning_rate):
+def build_model(learning_rate, last_activation=softmax):
     num_of_features = 9
     dim_hidden_1 = 12
     dim_hidden_2 = 6
@@ -119,17 +118,19 @@ def build_model(learning_rate):
     layer = Layer(num_of_features, dim_hidden_1, ReLU)
     layer1 = Layer(dim_hidden_1, dim_hidden_2, tanh_f)
     layer2 = SkipLayer(dim_hidden_2, num_of_features)
-    layer3 = Layer(dim_hidden_2, dim_hidden_3, softmax)
+    layer3 = Layer(dim_hidden_2, dim_hidden_3, last_activation)
 
     return NeuralNet([layer, layer1, layer2, layer3], skip_layer=layer2, learning_rate=learning_rate)
 
 def main():
     input, labels = get_data()
-    model = build_model(learning_rate=0.001)
-    trainer = Trainer(input, labels, 20, 100)
-    trainer.fit(model=model)
+    model = build_model(learning_rate=0.00001)
+    trainer = Trainer(input, labels, 20, 1000)
+    train_loss, validation_loss, train_accuracies, validation_accuracies = trainer.fit(model=model)
+    trainer.plot_model(train_loss, validation_loss, train_accuracies, validation_accuracies)
+if __name__ == "__main__":
+    main()
 
-main()
 
 
 
